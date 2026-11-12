@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Ball Factory</title>
+<meta name="description" content="A glowing ball machine to tap and watch. Made for Mark.">
+<meta name="theme-color" content="#05070d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ball Factory">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<style>
+  html, body {
+    margin: 0; padding: 0; height: 100%; width: 100%;
+    background: #05070d; overflow: hidden;
+    overscroll-behavior: none;
+    -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: none;
+    font-family: ui-rounded, "SF Pro Rounded", system-ui, -apple-system, sans-serif;
+  }
+  canvas { display: block; position: fixed; inset: 0; width: 100%; height: 100%; touch-action: none; }
+  #start {
+    position: fixed; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 28px;
+    background: radial-gradient(circle at 50% 45%, rgba(40,200,255,.18), rgba(5,7,13,.92) 60%);
+    color: #bff3ff; z-index: 10;
+  }
+  #start h1 {
+    margin: 0; font-size: clamp(40px, 8vw, 96px); letter-spacing: 2px;
+    color: #7fe9ff; text-shadow: 0 0 18px #19c8ff, 0 0 40px #0aa0e0;
+  }
+  #play {
+    width: 180px; height: 180px; border-radius: 50%;
+    border: 8px solid #3fdcff; background: rgba(20,140,200,.25);
+    box-shadow: 0 0 30px #19c8ff, inset 0 0 30px rgba(25,200,255,.5);
+    display: flex; align-items: center; justify-content: center;
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  #play::after {
+    content: ""; margin-left: 18px;
+    border-left: 70px solid #bff3ff; border-top: 44px solid transparent; border-bottom: 44px solid transparent;
+    filter: drop-shadow(0 0 10px #19c8ff);
+  }
+  @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+  #mute {
+    position: fixed; z-index: 5; width: 56px; height: 56px; border-radius: 50%;
+    top: max(14px, env(safe-area-inset-top)); right: max(14px, env(safe-area-inset-right));
+    border: 3px solid rgba(63,220,255,.55); background: rgba(10,30,45,.6); color: #7fe9ff;
+    font-size: 26px; line-height: 50px; text-align: center; padding: 0;
+  }
+  #rotate {
+    display: none; position: fixed; left: 0; right: 0; bottom: max(24px, env(safe-area-inset-bottom));
+    text-align: center; color: #7fe9ff; font-size: 22px; z-index: 4; pointer-events: none;
+    text-shadow: 0 0 10px #19c8ff;
+  }
+  @media (orientation: portrait) { #rotate { display: block; } }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<button id="mute" aria-label="Sound on or off">🔊</button>
+<div id="rotate">↻ Turn the iPad sideways for a bigger factory</div>
+<div id="start">
+  <h1>Ball Factory</h1>
+  <div id="play" role="button" aria-label="Play"></div>
+</div>
+<script src="game.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  }
+</script>
+</body>
+</html>
