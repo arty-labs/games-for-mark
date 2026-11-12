@@ -5,8 +5,15 @@ A glowing ball machine made for Mark. A friendly truck dumps colourful balls int
 **How to play**
 - Tap the truck (when the hand is pointing at it) to dump a load of balls.
 - Tap anywhere else to drop a ball there.
-- Tap the gears to make them spin super fast, tap the pegs or the star to make sounds.
-- The speaker button in the corner turns sound on and off.
+- Tap the machines to make them go: spinners and conveyor belts speed up, buckets tip, trapdoors open, flippers flip, the piston and lift go faster. Pegs and stars make sounds.
+- Fill the thermometer with melted balls to get fireworks, then the next factory rolls in.
+- The number buttons in the top-left corner jump straight to a factory. The speaker button turns sound on and off.
+
+**Factories**
+1. The Crusher: sieve, gear crusher, peg board, pinwheel
+2. Wheels & Belts: conveyor belts, spinning paddle, tipping bucket, piston pusher
+3. Lift & Hammer: zig-zag chute, ball lift, trapdoor, swinging hammer
+4. Flipper Fun: tipping bucket, conveyor, crusher, flippers and bumpers over the lava
 
 It works offline once it has been opened once, and it plays best with the iPad sideways.
 
