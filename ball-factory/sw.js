@@ -1,6 +1,6 @@
 // Offline support: cache the whole game on first visit.
 // Bump VERSION whenever you change a file so the iPad picks up the update.
-const VERSION = 'ball-factory-v3';
+const VERSION = 'ball-factory-v4';
 const FILES = [
   './', './index.html', './game.js', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png', './icons/apple-touch-icon.png'

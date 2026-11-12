@@ -1400,8 +1400,9 @@
     }
     for (const p of L.pegs) if (Math.hypot(x - p.x, y - p.y) < 24) { p.flash = 1; sfx.peg(p.note + (p.x / 100 | 0)); return; }
     if (x < 0 || x > W || y < 0 || y > H) return;
-    // bonus play balls: fun to drop, but they don't count for the level
-    addBall(x, y, Math.random() < 0.55 ? BIG : SMALL, HUES[(Math.random() * HUES.length) | 0], 0, 0, true);
+    // tapped balls count toward the goal just like truck balls; the timer starts with them too
+    addBall(x, y, Math.random() < 0.55 ? BIG : SMALL, HUES[(Math.random() * HUES.length) | 0]);
+    if (!demo && !run.finished) run.timing = true;
     burst(x, y, '#ffffff', 6, 140, 0.3, 2);
     sfx.pop();
   }
