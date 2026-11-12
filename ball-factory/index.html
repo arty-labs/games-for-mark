@@ -15,9 +15,10 @@
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <style>
+  :root { --neon: #3fdcff; --ink: #bff3ff; --bg: #05070d; --gold: #ffd84a; }
   html, body {
     margin: 0; padding: 0; height: 100%; width: 100%;
-    background: #05070d; overflow: hidden;
+    background: var(--bg); overflow: hidden; color: var(--ink);
     overscroll-behavior: none;
     -webkit-user-select: none; user-select: none;
     -webkit-touch-callout: none;
@@ -26,62 +27,191 @@
     font-family: ui-rounded, "SF Pro Rounded", system-ui, -apple-system, sans-serif;
   }
   canvas { display: block; position: fixed; inset: 0; width: 100%; height: 100%; touch-action: none; }
-  #start {
-    position: fixed; inset: 0; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; gap: 28px;
-    background: radial-gradient(circle at 50% 45%, rgba(40,200,255,.18), rgba(5,7,13,.92) 60%);
-    color: #bff3ff; z-index: 10;
+  button { font: inherit; color: inherit; cursor: pointer; }
+  .hidden { display: none !important; }
+
+  .panel {
+    position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 22px; padding: 20px;
+    background: radial-gradient(circle at 50% 45%, rgba(40,200,255,.16), rgba(5,7,13,.9) 65%);
   }
-  #start h1 {
-    margin: 0; font-size: clamp(40px, 8vw, 96px); letter-spacing: 2px;
-    color: #7fe9ff; text-shadow: 0 0 18px #19c8ff, 0 0 40px #0aa0e0;
+  h1, h2 { margin: 0; color: #7fe9ff; text-shadow: 0 0 18px #19c8ff, 0 0 40px #0aa0e0; letter-spacing: 1px; }
+  h1 { font-size: clamp(40px, 8vw, 96px); }
+  h2 { font-size: clamp(30px, 5vw, 56px); }
+  .btn {
+    border: 4px solid var(--neon); background: rgba(20,140,200,.22); border-radius: 22px;
+    padding: 12px 26px; font-size: 26px; font-weight: 700; color: var(--ink);
+    box-shadow: 0 0 18px rgba(25,200,255,.45);
   }
+  .btn.big { font-size: 34px; padding: 16px 40px; }
+  .btn.gold { border-color: var(--gold); color: #fff3c4; box-shadow: 0 0 18px rgba(255,200,40,.45); background: rgba(200,150,20,.2); }
+  .row { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; align-items: center; }
+
   #play {
-    width: 180px; height: 180px; border-radius: 50%;
-    border: 8px solid #3fdcff; background: rgba(20,140,200,.25);
+    width: 170px; height: 170px; border-radius: 50%;
+    border: 8px solid var(--neon); background: rgba(20,140,200,.25);
     box-shadow: 0 0 30px #19c8ff, inset 0 0 30px rgba(25,200,255,.5);
     display: flex; align-items: center; justify-content: center;
     animation: pulse 1.4s ease-in-out infinite;
   }
   #play::after {
     content: ""; margin-left: 18px;
-    border-left: 70px solid #bff3ff; border-top: 44px solid transparent; border-bottom: 44px solid transparent;
+    border-left: 66px solid var(--ink); border-top: 42px solid transparent; border-bottom: 42px solid transparent;
     filter: drop-shadow(0 0 10px #19c8ff);
   }
   @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+  .chip {
+    border: 3px solid rgba(63,220,255,.5); background: rgba(10,30,45,.7); border-radius: 999px;
+    padding: 8px 20px; font-size: 22px; font-weight: 700;
+  }
+  .chip.on { background: var(--neon); color: var(--bg); box-shadow: 0 0 16px #19c8ff; }
+  .chip.add { width: 48px; padding: 8px 0; }
+  .label { font-size: 18px; opacity: .75; }
+
+  /* level select */
+  #levelsel { justify-content: flex-start; padding-top: max(18px, env(safe-area-inset-top)); }
+  .topbar { width: min(1000px, 100%); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .topbar .info { font-size: 22px; font-weight: 700; text-align: center; }
+  .topbar .info small { display: block; font-size: 16px; opacity: .75; font-weight: 600; }
+  #grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; width: min(860px, 100%); }
+  .tile {
+    aspect-ratio: 1.25; border-radius: 20px; border: 4px solid var(--neon); background: rgba(20,140,200,.2);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    box-shadow: 0 0 14px rgba(25,200,255,.35); padding: 0;
+  }
+  .tile .num { font-size: clamp(26px, 4vw, 42px); font-weight: 800; }
+  .tile .st { color: var(--gold); font-size: clamp(16px, 2.4vw, 24px); letter-spacing: 2px; text-shadow: 0 0 8px rgba(255,200,40,.6); }
+  .tile.locked { border-color: rgba(63,220,255,.25); background: rgba(10,25,35,.5); box-shadow: none; }
+  .tile .lock { font-size: clamp(22px, 3.4vw, 34px); opacity: .7; }
+  .tile .need { font-size: clamp(11px, 1.6vw, 15px); color: var(--gold); opacity: .8; }
+  .shake { animation: shake .35s; }
+  @keyframes shake { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+
+  /* leaderboard */
+  .card { background: rgba(8,20,30,.85); border: 3px solid rgba(63,220,255,.5); border-radius: 24px; padding: 18px 22px; width: min(760px, 100%); max-height: 60vh; overflow: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 20px; }
+  td { padding: 7px 8px; border-bottom: 1px solid rgba(63,220,255,.15); }
+  td.gold { color: var(--gold); letter-spacing: 1px; }
+  td.empty { text-align: center; opacity: .7; padding: 24px; }
+  .note { font-size: 15px; opacity: .65; max-width: 700px; text-align: center; }
+
+  /* end of level */
+  #done-stars { font-size: clamp(60px, 11vw, 110px); letter-spacing: 10px; color: rgba(255,255,255,.18); }
+  #done-stars span.on { color: var(--gold); text-shadow: 0 0 24px rgba(255,200,40,.9); display: inline-block; animation: pop .5s backwards; }
+  @keyframes pop { 0% { transform: scale(0) rotate(-40deg); } 80% { transform: scale(1.25); } 100% { transform: scale(1); } }
+  .stats { display: flex; gap: 36px; font-size: 26px; font-weight: 700; }
+  .stats div { text-align: center; }
+  .stats small { display: block; font-size: 16px; opacity: .7; }
+  #done-note, #fail-count { font-size: 20px; text-align: center; color: #fff3c4; line-height: 1.5; }
+
+  /* HUD */
+  #hud {
+    position: fixed; z-index: 5; left: 50%; transform: translateX(-50%);
+    top: max(10px, env(safe-area-inset-top));
+    display: flex; align-items: center; gap: 16px; padding: 6px 10px 6px 6px;
+    background: rgba(5,15,25,.7); border: 2px solid rgba(63,220,255,.4); border-radius: 999px;
+    font-size: 20px; font-weight: 700; white-space: nowrap;
+  }
+  #hud-menu { width: 42px; height: 42px; border-radius: 50%; border: 2px solid rgba(63,220,255,.6); background: rgba(20,140,200,.25); padding: 0; font-size: 20px; }
+  #hud .gold { color: var(--gold); }
+  #boosters {
+    position: fixed; z-index: 5; display: flex; gap: 12px;
+    left: max(12px, env(safe-area-inset-left)); bottom: max(12px, env(safe-area-inset-bottom));
+  }
+  #boosters button {
+    position: relative; width: 64px; height: 64px; border-radius: 18px; padding: 0; font-size: 30px;
+    border: 3px solid var(--gold); background: rgba(40,30,5,.6); box-shadow: 0 0 14px rgba(255,200,40,.4);
+  }
+  #boosters button:disabled { opacity: .35; box-shadow: none; }
+  #boosters button b {
+    position: absolute; right: -8px; top: -8px; min-width: 26px; height: 26px; border-radius: 13px;
+    background: var(--gold); color: var(--bg); font-size: 16px; line-height: 26px;
+  }
   #mute {
-    position: fixed; z-index: 5; width: 56px; height: 56px; border-radius: 50%;
-    top: max(14px, env(safe-area-inset-top)); right: max(14px, env(safe-area-inset-right));
+    position: fixed; z-index: 11; width: 50px; height: 50px; border-radius: 50%;
+    top: max(10px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right));
     border: 3px solid rgba(63,220,255,.55); background: rgba(10,30,45,.6); color: #7fe9ff;
-    font-size: 26px; line-height: 50px; text-align: center; padding: 0;
+    font-size: 22px; line-height: 44px; text-align: center; padding: 0;
   }
-  #levels {
-    position: fixed; z-index: 5; display: flex; gap: 10px;
-    top: max(14px, env(safe-area-inset-top)); left: max(14px, env(safe-area-inset-left));
-  }
-  #levels button {
-    width: 48px; height: 48px; border-radius: 50%; padding: 0;
-    border: 3px solid rgba(63,220,255,.45); background: rgba(10,30,45,.6); color: #7fe9ff;
-    font: 700 22px ui-rounded, system-ui, sans-serif;
-  }
-  #levels button.on { background: #3fdcff; color: #05070d; box-shadow: 0 0 16px #19c8ff; }
   #rotate {
     display: none; position: fixed; left: 0; right: 0; bottom: max(24px, env(safe-area-inset-bottom));
-    text-align: center; color: #7fe9ff; font-size: 22px; z-index: 4; pointer-events: none;
+    text-align: center; color: #7fe9ff; font-size: 22px; z-index: 12; pointer-events: none;
     text-shadow: 0 0 10px #19c8ff;
   }
-  @media (orientation: portrait) { #rotate { display: block; } }
+  @media (orientation: portrait) { #rotate { display: block; } #hud { font-size: 16px; gap: 10px; } }
+  @media (max-width: 700px) { #grid { grid-template-columns: repeat(4, 1fr); } .stats { gap: 18px; font-size: 20px; } }
 </style>
 </head>
 <body>
 <canvas id="game"></canvas>
-<div id="levels"></div>
+
+<div id="hud" class="hidden">
+  <button id="hud-menu" aria-label="Levels">☰</button>
+  <span>Lv <span id="hud-level">1</span></span>
+  <span>⏱ <span id="hud-time">0:00</span></span>
+  <span class="gold">⭐ <span id="hud-score">0</span></span>
+  <span>🔥 <span id="hud-goal">0/60</span></span>
+  <span id="hud-trucks">🚚🚚🚚</span>
+</div>
+<div id="boosters" class="hidden">
+  <button id="b-truck" aria-label="Extra truck booster">🚚<b id="b-truck-n">0</b></button>
+  <button id="b-turbo" aria-label="Turbo booster">⚡<b id="b-turbo-n">0</b></button>
+</div>
 <button id="mute" aria-label="Sound on or off">🔊</button>
 <div id="rotate">↻ Turn the iPad sideways for a bigger factory</div>
-<div id="start">
+
+<div id="start" class="panel">
   <h1>Ball Factory</h1>
+  <div class="label">Who's playing?</div>
+  <div id="players" class="row"></div>
   <div id="play" role="button" aria-label="Play"></div>
 </div>
+
+<div id="levelsel" class="panel hidden">
+  <div class="topbar">
+    <button id="lv-back" class="btn">‹</button>
+    <div class="info"><span id="total-stars">★ 0 / 60</span><small><span id="lv-player">Mark</span> · <span id="lv-boost"></span></small></div>
+    <button id="lv-board" class="btn gold">🏆</button>
+  </div>
+  <div id="grid"></div>
+</div>
+
+<div id="board" class="panel hidden">
+  <h2>🏆 Leaderboard</h2>
+  <div class="card scroll"><table id="board-list"></table></div>
+  <div class="card scroll" style="max-height:22vh"><table id="board-players"></table></div>
+  <div class="note">Scores are saved on this iPad.</div>
+  <button id="board-back" class="btn">Back</button>
+</div>
+
+<div id="done" class="panel hidden">
+  <h2>Level complete!</h2>
+  <div id="done-stars"></div>
+  <div class="stats">
+    <div><small>Time</small><span id="done-time">0:00</span></div>
+    <div><small>Score</small><span id="done-score">0</span></div>
+    <div><small>&nbsp;</small><span id="done-best"></span></div>
+  </div>
+  <div id="done-note"></div>
+  <div class="row">
+    <button id="done-retry" class="btn">↻ Again</button>
+    <button id="done-levels" class="btn">▦ Levels</button>
+    <button id="done-next" class="btn big gold">Next ▶</button>
+  </div>
+</div>
+
+<div id="fail" class="panel hidden">
+  <h2>Out of trucks!</h2>
+  <div id="fail-count"></div>
+  <div class="row">
+    <button id="fail-boost" class="btn big gold">🚚 Extra truck (<span id="fail-boost-n">0</span>)</button>
+  </div>
+  <div class="row">
+    <button id="fail-retry" class="btn">↻ Try again</button>
+    <button id="fail-levels" class="btn">▦ Levels</button>
+  </div>
+</div>
+
 <script src="game.js"></script>
 <script>
   if ('serviceWorker' in navigator) {

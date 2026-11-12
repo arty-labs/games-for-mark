@@ -1,6 +1,6 @@
 // Ball Factory: a glowing ball machine for little hands.
 // Tap the truck to dump balls, tap anywhere to drop a ball, tap the machines to make them move.
-// Fill the thermometer with melted balls to get fireworks and the next factory.
+// Melt enough balls before the trucks run out. Faster means more stars.
 (() => {
   'use strict';
 
@@ -9,7 +9,6 @@
   const BIG = 16, SMALL = 7;         // ball radii
   const MAX_BALLS = 420;
   const NEON = '#3fdcff';
-  const CELEBRATE_AT = 60;           // melted balls before fireworks + next level
   const TAU = Math.PI * 2;
 
   const canvas = document.getElementById('game');
@@ -152,32 +151,34 @@
     return p;
   }
 
-  // Piston: a plate that slides back and forth pushing balls along a floor
-  function Piston(x0, x1, yTop, yBot, period) {
-    const p = { x: x0, phase: 0, boost: 0, ksegs: [], kcircs: [] };
+  // Piston: a plate that slides from xa towards xb and back, pushing balls ahead of it
+  function Piston(xa, xb, yTop, yBot, period) {
+    const sd = Math.sign(xb - xa) || 1;
+    const p = { x: xa, phase: 0, boost: 0, ksegs: [], kcircs: [] };
     p.update = dt => {
       p.boost = Math.max(0, p.boost - dt);
       p.phase += dt * TAU / period * (p.boost > 0 ? 2.5 : 1);
       const k = 0.5 - 0.5 * Math.cos(p.phase);
-      const nx = x0 + (x1 - x0) * k;
+      const nx = xa + (xb - xa) * k;
       const vx = dt > 0 ? (nx - p.x) / dt : 0;
       p.x = nx;
-      p.ksegs = [{ ax: p.x, ay: yTop, bx: p.x, by: yBot, t: 7, vx, vy: 0, om: 0, px: 0, py: 0, grip: 0, e: 0.2, oneSide: 1 }];
+      p.ksegs = [{ ax: p.x, ay: yTop, bx: p.x, by: yBot, t: 7, vx, vy: 0, om: 0, px: 0, py: 0, grip: 0, e: 0.2, oneSide: sd }];
     };
     p.draw = () => {
       ctx.save();
-      // rod back to the cylinder
+      const my = (yTop + yBot) / 2;
       glowStroke(ctx, 8, '#1b8fb3', 6);
-      ctx.beginPath(); ctx.moveTo(x0 - 40, (yTop + yBot) / 2); ctx.lineTo(p.x, (yTop + yBot) / 2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(xa - 40 * sd, my); ctx.lineTo(p.x, my); ctx.stroke();
       ctx.fillStyle = 'rgba(25,120,170,0.35)';
       glowStroke(ctx, 5);
-      ctx.beginPath(); ctx.rect(x0 - 70, yTop - 4, 34, yBot - yTop + 8); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.rect(sd > 0 ? xa - 70 : xa + 36, yTop - 4, 34, yBot - yTop + 8); ctx.fill(); ctx.stroke();
       glowStroke(ctx, 14, p.boost > 0 ? '#bff8ff' : NEON);
       ctx.beginPath(); ctx.moveTo(p.x, yTop); ctx.lineTo(p.x, yBot); ctx.stroke();
       ctx.restore();
     };
     p.tap = (tx, ty) => {
-      if (tx < x0 - 80 || tx > x1 + 30 || ty < yTop - 30 || ty > yBot + 30) return false;
+      const lo = Math.min(xa, xb) - 80, hi = Math.max(xa, xb) + 30;
+      if (tx < lo || tx > hi || ty < yTop - 30 || ty > yBot + 30) return false;
       p.boost = 3; sfx.whirr(); return true;
     };
     p.update(0);
@@ -229,9 +230,9 @@
   }
 
   // Trapdoor: hinged at (hx,hy), swings down to let the balls fall
-  function Trapdoor(hx, hy, len, dir, every) {
+  function Trapdoor(hx, hy, len, dir, every, openAngle = 1.35) {
     const p = { angle: 0, om: 0, state: 'closed', timer: 0, ksegs: [], kcircs: [] };
-    const openA = 1.35 * dir;
+    const openA = openAngle * dir;
     p.update = dt => {
       p.timer += dt;
       if (p.state === 'closed' && p.timer > every) p.openNow();
@@ -272,7 +273,7 @@
   }
 
   // Swinging hammer on a rod
-  function Pendulum(px, py, len, amp, speed, headR) {
+  function Pendulum(px, py, len, amp, speed, headR, rodCollides = true) {
     const p = { t: 0, angle: 0, om: 0, boost: 0, ksegs: [], kcircs: [] };
     p.update = dt => {
       p.boost = Math.max(0, p.boost - dt);
@@ -282,7 +283,8 @@
       // angle 0 = hanging straight down
       const hx = px + Math.sin(p.angle) * len, hy = py + Math.cos(p.angle) * len;
       const om = -p.om; // screen-space angular velocity
-      p.ksegs = [{ ax: px, ay: py, bx: hx, by: hy, t: 5, vx: 0, vy: 0, om, px, py, grip: 0, e: 0.3 }];
+      p.ksegs = rodCollides ? [{ ax: px, ay: py, bx: hx, by: hy, t: 5, vx: 0, vy: 0, om, px, py, grip: 0, e: 0.3 }] : [];
+      p.rod = [px, py, hx, hy];
       p.kcircs = [{ x: hx, y: hy, r: headR, vx: -om * (hy - py), vy: om * (hx - px), e: 0.6 }];
       p.head = [hx, hy];
     };
@@ -356,7 +358,7 @@
     L.pegRow = (x0, x1, y, dx) => { for (let x = x0; x <= x1; x += dx) L.pegs.push({ x, y, r: 7, flash: 0, note: L.pegs.length % 7, last: 0 }); };
     L.pit = (x0, x1, top, bottom = 990) => { L.lava = { x0, x1, top, bottom }; };
     // shared: truck rail and funnel
-    L.wall(318, 160, 1600, 160, 6);
+    L.parts.push(Conveyor(1600, 160, 318, 160, 260));
     L.wall(60, 100, 172, 212, 6);
     L.wall(318, 160, 288, 212, 6);
     return L;
@@ -500,12 +502,154 @@
     return L;
   }
 
-  const LEVELS = [level1, level2, level3, level4];
+  // ======================================================================
+  // Levels 5-20 are built from machine modules laid out in three rows.
+  // Row A runs right under the truck, row B comes back left, row C runs
+  // right into the lava. Each module takes balls falling in at its start
+  // and drops them off its end. u = distance along the row.
+  // ======================================================================
+  const belt = (L, X, u0, y0, u1, y1, speed = 210) => L.parts.push(Conveyor(X(u0), y0, X(u1), y1, speed));
+  const MODULES = {
+    ramp: { w: 200, build(L, X, y0, w) { belt(L, X, 0, y0, w, y0 + 4); return y0 + 4; } },
+    conv: { w: 320, build(L, X, y0, w) { belt(L, X, 0, y0, w, y0 + 4); return y0 + 4; } },
+    rotor: { w: 260, build(L, X, y0, w, dir) {
+      belt(L, X, 0, y0, w, y0 + 4);
+      L.parts.push(Rotor(X(w / 2), y0 - 57, 4, 28, -2.6 * dir));
+      return y0 + 4;
+    } },
+    bumpers: { w: 300, build(L, X, y0, w) {
+      belt(L, X, 0, y0, w, y0 + 4);
+      for (const f of [0.3, 0.72]) L.bumpers.push({ x: X(w * f), y: y0 - 54, r: 17, flash: 0, spin: 0 });
+      return y0 + 4;
+    } },
+    pendulum: { w: 300, build(L, X, y0, w) {
+      belt(L, X, 0, y0, w, y0 + 4);
+      L.parts.push(Pendulum(X(w / 2), y0 - 115, 70, 0.8, 2.0, 19, false));
+      return y0 + 4;
+    } },
+    piston: { w: 300, build(L, X, y0, w) {
+      L.wall(X(0), y0, X(w), y0 + 4);
+      L.parts.push(Piston(X(16), X(130), y0 - 48, y0 - 7, 2.2));
+      return y0 + 4;
+    } },
+    crusher: { w: 240, build(L, X, y0, w) {
+      const gy = y0 + 48, xa = X(72), xb = X(168);
+      L.gears.push({ x: Math.min(xa, xb), y: gy, r: 36, dir: 1, angle: 0, boost: 0 }, { x: Math.max(xa, xb), y: gy, r: 36, dir: -1, angle: 0.2, boost: 0 });
+      L.wall(X(0), y0 + 6, X(42), y0 + 22);
+      L.wall(X(w), y0 - 30, X(w), y0 + 10, 6); L.wall(X(w), y0 + 10, X(200), y0 + 24, 6);
+      L.wall(X(0), y0 + 60, X(0), y0 + 104);
+      belt(L, X, 0, y0 + 104, w, y0 + 108);
+      return y0 + 108;
+    } },
+    bucket: { w: 200, build(L, X, y0, w, dir) {
+      L.parts.push(TipBucket(X(80), y0 + 45, 90, 40, dir, { need: 6, tip: 2.1 }));
+      L.wall(X(0), y0 + 15, X(0), y0 + 110);
+      belt(L, X, 0, y0 + 114, w, y0 + 118);
+      return y0 + 118;
+    } },
+    trapdoor: { w: 190, build(L, X, y0, w, dir) {
+      L.wall(X(0), y0 + 8, X(0), y0 + 120);
+      L.wall(X(110), y0 - 30, X(110), y0 + 40, 6);
+      L.parts.push(Trapdoor(X(6), y0 + 40, 96, dir, 3.2, 0.95));
+      belt(L, X, 0, y0 + 124, w, y0 + 128);
+      return y0 + 128;
+    } },
+    pegs: { w: 260, build(L, X, y0, w) {
+      L.wall(X(0), y0 - 6, X(0), y0 + 100);
+      for (let r = 0; r < 2; r++) for (let u = 50 + (r % 2) * 30; u < w - 20; u += 60) {
+        L.pegs.push({ x: X(u), y: y0 + 16 + r * 36, r: 6, flash: 0, note: L.pegs.length % 7, last: 0 });
+      }
+      belt(L, X, 0, y0 + 104, w, y0 + 108);
+      return y0 + 108;
+    } },
+    sieve: { w: 420, build(L, X, y0, w) {
+      const up = u => y0 + 0.06 * u;
+      L.wall(X(0), y0, X(40), up(40));
+      L.walls.push({ ax: X(40), ay: up(40), bx: X(w - 110), by: up(w - 110), t: 5, sieve: true });
+      L.wall(X(w - 110), up(w - 110), X(w - 70), up(w - 70));
+      L.wall(X(18), y0 + 30, X(18), y0 + 62);
+      belt(L, X, 18, y0 + 66, w, y0 + 70);
+      return y0 + 70;
+    } },
+  };
+
+  const ROWS = [
+    { x0: 130, len: 1310, dir: 1 },
+    { x0: 1505, len: 1380, dir: -1 },
+    { x0: 72, len: 1078, dir: 1 },
+  ];
+
+  function modularLevel(spec) {
+    const L = baseLevel(spec.name);
+    L.wall(130, 215, 130, 262);
+    let y = 262;
+    const ends = [];
+    spec.rows.forEach((mods, ri) => {
+      const row = ROWS[ri];
+      const list = mods.map(m => Array.isArray(m) ? { name: m[0], w: m[1] } : { name: m, w: MODULES[m].w });
+      const used = list.reduce((a, m) => a + m.w, 0);
+      const spare = row.len - used;
+      if (spare >= 60) list.push({ name: 'ramp', w: spare });
+      else list[0].w += spare;
+      if (ri === 1) y = Math.max(470, y + 50);
+      if (ri === 2) y = Math.max(750, y + 50);
+      let u = 0;
+      list.forEach((m, i) => {
+        if (i > 0) y += 16;
+        const base = row.x0 + row.dir * u;
+        const X = v => base + row.dir * v;
+        y = MODULES[m.name].build(L, X, y, m.w, row.dir);
+        u += m.w;
+      });
+      ends.push(y);
+    });
+    // chutes between rows
+    L.wall(1518, 166, 1518, 990, 6);
+    L.wall(60, 300, 60, Math.max(750, ends[1] + 50) + 8, 6);
+    // lava pit
+    L.wall(1158, ends[2] + 18, 1158, 990, 6); L.wall(1158, 990, 1518, 990, 6);
+    L.pit(1163, 1513, 950);
+    if (spec.flippers) {
+      L.parts.push(Flipper(1186, 885, 125, 1, 1.7, 0));
+      L.parts.push(Flipper(1497, 885, 125, -1, 1.7, 0.85));
+      L.wall(1158, 846, 1174, 874); L.wall(1518, 846, 1509, 874);
+    }
+    L.maxY = Math.max(...ends);
+    L.ends = ends;
+    L.bad = ends[0] > 450 || ends[1] > 690 || ends[2] > (spec.flippers ? 860 : 920);
+    L.decor = [
+      [[20, 960], [1140, 960]],
+      [[20, 980], [1140, 980]],
+      [[1545, 180], [1545, 700]],
+    ];
+    return L;
+  }
+
+  const SPECS = [
+    { name: 'Bumper Alley', rows: [['conv', 'bumpers'], ['ramp', 'bumpers'], ['ramp', 'rotor']] },
+    { name: 'Belt Run', rows: [['conv', 'conv', 'rotor'], ['conv', 'pegs'], ['conv', 'rotor']] },
+    { name: 'The Sifter', rows: [['conv', 'sieve'], ['ramp', 'bucket'], ['ramp', 'rotor']] },
+    { name: 'Gear Grinder', rows: [['conv', 'crusher'], ['conv', 'bumpers'], ['pegs', 'rotor']] },
+    { name: 'Push It', rows: [['conv', 'piston'], ['ramp', 'piston', 'rotor'], ['conv', 'bumpers']] },
+    { name: 'Trap Time', rows: [['conv', 'trapdoor'], ['ramp', 'conv', 'rotor'], ['bucket', 'rotor']] },
+    { name: 'Hammer Row', rows: [['conv', 'sieve'], ['ramp', 'pendulum'], ['piston', 'pendulum']] },
+    { name: 'Flipper Pit', rows: [['conv', 'crusher'], ['conv', 'rotor'], ['ramp', 'bumpers']], flippers: true },
+    { name: 'Bucket Brigade', rows: [['conv', 'bucket', 'rotor'], ['trapdoor', 'conv', 'pendulum'], ['pegs', 'piston']] },
+    { name: 'Sort & Smash', rows: [['conv', 'sieve', 'rotor'], ['crusher', 'conv', 'bumpers'], ['ramp', 'pendulum']], flippers: true },
+    { name: 'Busy Belts', rows: [['conv', 'trapdoor', 'bumpers'], ['piston', 'pegs', 'rotor'], ['conv', 'pendulum']] },
+    { name: 'Crunch Time', rows: [['conv', 'crusher', 'rotor'], ['bucket', 'conv', 'pendulum'], ['piston', 'rotor']], flippers: true },
+    { name: 'Pinball Plant', rows: [['conv', 'pegs', 'bumpers'], ['crusher', 'piston', 'bumpers'], ['ramp', 'rotor', 'bumpers']], flippers: true },
+    { name: 'Double Trouble', rows: [['conv', 'trapdoor', 'rotor'], ['bucket', 'pendulum', 'pendulum'], ['pegs', 'piston', 'rotor']] },
+    { name: 'Mega Mill', rows: [['conv', 'sieve', 'pendulum'], ['crusher', 'conv', 'rotor', 'bumpers'], ['piston', 'conv']], flippers: true },
+    { name: 'The Big Machine', rows: [['conv', 'crusher', 'piston'], ['trapdoor', 'conv', 'pendulum', 'rotor'], ['bucket', 'piston', 'rotor']] },
+  ];
+
+  const LEVELS = [level1, level2, level3, level4, ...SPECS.map(sp => () => modularLevel(sp))];
   let levelIndex = 0;
   let L = null;
 
   // ======================================================================
-  // State
+  // State, rules and saved progress
   // ======================================================================
   let balls = [];
   let idc = 0;
@@ -513,14 +657,38 @@
   let melted = 0;
   let stuckPops = 0;
   let celebrating = 0;
-  let advancing = false;
-  let banner = { text: '', t: 0 };
+  let banner = { text: '', sub: '', t: 0 };
   let time = 0;
-  let started = false;
+  let mode = 'title';            // title | levels | play | done | fail
+  let demo = true;               // the machine running behind the menus
   const THERMO = { x: 1565, top: 260, bottom: 900, bulb: 26 };
-  const truck = { state: 'arriving', x: 1750, parkX: 300, bed: 0, timer: 0, load: [], spawnT: 0, bob: 0 };
+  const truck = { state: 'arriving', x: 1750, parkX: 300, bed: 0, timer: 0, load: [], spawnT: 0, bob: 0, hurry: 0 };
   const HUES = [0, 30, 52, 120, 175, 205, 260, 300, 330];
   const ballColor = h => `hsl(${h} 95% 60%)`;
+
+  // Per level: trucks you get, balls to melt, and the times for 3 and 2 stars (seconds).
+  // Tuned by simulating every level (see README).
+  const TUNING = [
+    [3, 160, 30, 39], [3, 80, 32, 42], [3, 80, 49, 63], [3, 160, 33, 43], [3, 80, 51, 66],
+    [3, 95, 46, 60], [3, 95, 45, 59], [3, 200, 43, 56], [3, 95, 46, 59], [3, 95, 54, 67],
+    [3, 95, 41, 54], [3, 200, 43, 56], [3, 110, 48, 60], [3, 225, 45, 56], [3, 110, 70, 81],
+    [3, 225, 46, 55], [3, 220, 45, 54], [3, 110, 58, 66], [3, 225, 47, 53], [3, 230, 45, 55],
+  ];
+  const STARS_NEEDED = i => (i === 0 ? 0 : i <= 4 ? 1 : i <= 11 ? 2 : 3);
+
+  const run = { level: 0, target: 60, trucksLeft: 3, timer: 0, timing: false, score: 0, finished: false, turbo: 0, endT: 0, result: null };
+
+  const SAVE_KEY = 'bf-save-v1';
+  function defaultSave() {
+    return { stars: Array(20).fill(0), best: Array(20).fill(null), boosters: { truck: 3, turbo: 3 }, players: ['Mark'], player: 'Mark', runs: [] };
+  }
+  let save = defaultSave();
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (raw) save = Object.assign(defaultSave(), JSON.parse(raw));
+  } catch (e) {}
+  function persist() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) {} }
+  const unlocked = i => i === 0 || save.stars[i - 1] >= STARS_NEEDED(i);
 
   function refillTruck() {
     truck.load = [];
@@ -529,23 +697,25 @@
     truck.load.sort(() => Math.random() - 0.5);
   }
 
-  function loadLevel(i) {
+  function loadLevel(i, asDemo = false) {
     levelIndex = (i + LEVELS.length) % LEVELS.length;
     L = LEVELS[levelIndex]();
-    balls = []; sparks = []; melted = 0; celebrating = 0; advancing = false;
-    truck.state = 'arriving'; truck.x = 1750; truck.bed = 0; refillTruck();
-    banner = { text: `${levelIndex + 1}. ${L.name}`, t: 2.8 };
+    demo = asDemo;
+    balls = []; sparks = []; melted = 0; celebrating = 0;
+    const [trucks, target, t3, t2] = TUNING[levelIndex];
+    Object.assign(run, { level: levelIndex, target, t3, t2, trucksLeft: trucks, timer: 0, timing: false, score: 0, finished: false, turbo: 0, endT: 0, result: null });
+    truck.state = 'arriving'; truck.x = 1750; truck.bed = 0; truck.hurry = 0; refillTruck();
+    banner = asDemo ? { text: '', sub: '', t: 0 } : { text: `Level ${levelIndex + 1}: ${L.name}`, sub: `Melt ${target} balls with ${trucks} trucks`, t: 3.2 };
     if (canvas.width) buildStatic();
-    updateLevelButtons();
-    try { localStorage.setItem('bf-level', String(levelIndex)); } catch (e) {}
+    if (typeof updateHud === 'function') updateHud();
   }
 
-  function addBall(x, y, r, h, vx = 0, vy = 0) {
+  function addBall(x, y, r, h, vx = 0, vy = 0, free = false) {
     if (balls.length >= MAX_BALLS) {
-      const old = balls.find(b => !b.melt && !b.pop);
+      const old = balls.find(b => !b.melt && !b.pop && b.free) || balls.find(b => !b.melt && !b.pop);
       if (old) old.pop = 0.001;
     }
-    balls.push({ id_: idc++, x, y, vx, vy, r, h, col: ballColor(h), still: 0, melt: 0, pop: 0, age: 0 });
+    balls.push({ id_: idc++, x, y, vx, vy, r, h, col: ballColor(h), still: 0, melt: 0, pop: 0, age: 0, free });
   }
 
   function burst(x, y, color, n = 10, speed = 260, life = 0.6, size = 3) {
@@ -743,10 +913,11 @@
   function splitBall(b) {
     b.pop = 0.001;
     for (let i = 0; i < 3; i++) {
-      addBall(b.x + (i - 1) * 6, b.y + 10 + i * 2, SMALL, HUES[(HUES.indexOf(b.h) + i) % HUES.length], (i - 1) * 40, 120);
+      addBall(b.x + (i - 1) * 6, b.y + 10 + i * 2, SMALL, HUES[(HUES.indexOf(b.h) + i) % HUES.length], (i - 1) * 40, 120, b.free);
     }
     burst(b.x, b.y + 10, b.col, 14, 300, 0.5, 3);
     sfx.crunch();
+    if (!b.free) addScore(3);
   }
 
   function step(dt) {
@@ -793,14 +964,14 @@
         }
         for (const p of L.pegs) {
           const hit = collideCircle(b, p, 0.45);
-          if (hit > 60 && time - p.last > 0.12) { p.flash = 1; p.last = time; sfx.peg(p.note + (p.x / 100 | 0)); }
+          if (hit > 60 && time - p.last > 0.12) { p.flash = 1; p.last = time; sfx.peg(p.note + (p.x / 100 | 0)); if (!b.free) addScore(1); }
         }
         for (const bp of L.bumpers) {
           const hit = collideCircle(b, bp, 0.2);
           if (hit) {
             const nx = b.x - bp.x, ny = b.y - bp.y, d = Math.hypot(nx, ny) || 1;
             b.vx += nx / d * 260 * h * 20; b.vy += ny / d * 120 * h * 20;
-            if (bp.flash < 0.5) { sfx.bumper(); burst(b.x, b.y, '#ffe36b', 6, 200, 0.35, 2.5); }
+            if (bp.flash < 0.5) { sfx.bumper(); burst(b.x, b.y, '#ffe36b', 6, 200, 0.35, 2.5); if (!b.free) addScore(2); }
             bp.flash = 1;
           }
         }
@@ -827,13 +998,16 @@
       b.age += dt;
       if (b.melt) {
         b.melt += dt;
-        if (b.melt > 0.8) { b.dead = true; melted++; if (melted === CELEBRATE_AT) celebrate(); }
+        if (b.melt > 0.8) {
+          b.dead = true;
+          if (!b.free) { melted++; addScore(b.r > 10 ? 10 : 5); if (melted >= run.target && !run.finished && !demo) finishLevel(); }
+        }
         continue;
       }
       if (b.pop) { b.pop += dt; if (b.pop > 0.25) b.dead = true; continue; }
       if (b.sx === undefined || Math.hypot(b.x - b.sx, b.y - b.sy) > 10) { b.sx = b.x; b.sy = b.y; b.still = 0; }
       else b.still += dt;
-      if (b.still > 6 || b.y > H + 60 || b.x < -60 || b.x > W + 60) {
+      if (b.still > 12 || b.y > H + 60 || b.x < -60 || b.x > W + 60) {
         b.pop = 0.001; stuckPops++; if (window.__pops) window.__pops.push([b.x | 0, b.y | 0, b.r]); burst(b.x, b.y, b.col, 8, 160, 0.4, 2.5); sfx.pop();
       }
     }
@@ -844,19 +1018,61 @@
 
     updateTruck(dt);
     if (banner.t > 0) banner.t -= dt;
+    if (run.timing) run.timer += dt;
+    if (run.turbo > 0) {
+      run.turbo -= dt;
+      for (const part of L.parts) if ('boost' in part) part.boost = Math.max(part.boost, 0.3);
+      for (const g of L.gears) g.boost = Math.max(g.boost, 0.3);
+      truck.hurry = Math.max(truck.hurry, 0.3);
+    }
     if (celebrating > 0) {
       celebrating -= dt;
       if (Math.random() < dt * 5) firework();
-      if (celebrating <= 0 && advancing) loadLevel(levelIndex + 1);
     }
+    if (run.finished && mode === 'play') {
+      run.endT += dt;
+      if (run.endT > 3) showDone();
+    }
+    // out of trucks and no balls left: level failed
+    if (!demo && mode === 'play' && !run.finished && run.trucksLeft === 0 && truck.state === 'out' && !balls.some(b => !b.free && !b.pop)) {
+      showFail();
+    }
+    // the menu background keeps the factory busy on its own
+    if (demo && truck.state === 'parked' && truck.timer > 1.5) dumpTruck();
+    if (demo && truck.state === 'out') { run.trucksLeft = 3; truck.state = 'away'; truck.timer = 0; }
+    if (!demo && mode === 'play' && (frame % 10) === 0) updateHud();
   }
 
-  function celebrate() {
-    celebrating = 4;
-    advancing = true;
-    banner = { text: 'Hooray! 🎉', t: 3.5 };
+  function addScore(n) { if (!demo && !run.finished) run.score += n; }
+
+  function finishLevel() {
+    run.finished = true;
+    run.timing = false;
+    const t = run.timer;
+    const stars = t <= run.t3 ? 3 : t <= run.t2 ? 2 : 1;
+    const bonus = stars * 100 + Math.max(0, Math.round((run.t2 - t) * 10));
+    run.score += bonus;
+    const i = run.level;
+    const prevStars = save.stars[i];
+    const wasUnlocked = i + 1 < 20 && unlocked(i + 1);
+    save.stars[i] = Math.max(save.stars[i], stars);
+    const best = save.best[i];
+    const newBest = !best || run.score > best.score;
+    if (newBest) save.best[i] = { score: run.score, time: Math.round(t * 10) / 10 };
+    const earned = [];
+    if (stars === 3) { save.boosters.truck++; earned.push('🚚'); }
+    if (stars >= 2) { save.boosters.turbo++; earned.push('⚡'); }
+    save.runs.push({ name: save.player, level: i + 1, score: run.score, stars, time: Math.round(t * 10) / 10, date: Date.now() });
+    save.runs.sort((a, b) => b.score - a.score);
+    save.runs = save.runs.slice(0, 50);
+    persist();
+    run.result = { stars, t, bonus, newBest, earned, unlockedNext: i + 1 < 20 && !wasUnlocked && unlocked(i + 1), prevStars };
+    celebrating = 3;
+    banner = { text: 'Hooray! 🎉', sub: '', t: 3 };
     sfx.yay();
+    updateHud();
   }
+
   function firework() {
     const x = 300 + Math.random() * 1000, y = 120 + Math.random() * 300;
     burst(x, y, ballColor(HUES[(Math.random() * HUES.length) | 0]), 40, 420, 1.2, 4);
@@ -869,17 +1085,19 @@
   function updateTruck(dt) {
     const t = truck;
     t.bob += dt;
+    t.hurry = Math.max(0, t.hurry - dt);
+    const fast = t.hurry > 0 ? 2.5 : 1;
     if (t.state === 'arriving') {
       const dx = t.parkX - t.x;
-      t.x += Math.sign(dx) * Math.min(Math.abs(dx), 380 * dt);
+      t.x += Math.sign(dx) * Math.min(Math.abs(dx), 380 * fast * dt);
       if (Math.abs(dx) < 1) { t.state = 'parked'; t.timer = 0; sfx.horn(); }
     } else if (t.state === 'parked') {
       t.timer += dt;
     } else if (t.state === 'dumping') {
-      t.timer += dt;
-      t.bed = Math.min(1, t.bed + dt * 1.6);
+      t.timer += dt * fast;
+      t.bed = Math.min(1, t.bed + dt * 1.6 * fast);
       if (t.bed > 0.55 && t.load.length) {
-        t.spawnT -= dt;
+        t.spawnT -= dt * fast;
         while (t.spawnT <= 0 && t.load.length) {
           const l = t.load.pop();
           addBall(t.x - 30 + Math.random() * 14, 128 + Math.random() * 10, l.r, l.h, -90 - Math.random() * 120, 40);
@@ -888,22 +1106,29 @@
       }
       if (!t.load.length && t.timer > 1.6) t.state = 'lowering';
     } else if (t.state === 'lowering') {
-      t.bed = Math.max(0, t.bed - dt * 1.4);
+      t.bed = Math.max(0, t.bed - dt * 1.4 * fast);
       if (t.bed === 0) t.state = 'leaving';
     } else if (t.state === 'leaving') {
-      t.x += 420 * dt;
-      if (t.x > 1800) { t.state = 'away'; t.timer = 0; refillTruck(); }
+      t.x += 420 * fast * dt;
+      if (t.x > 1800) { t.timer = 0; refillTruck(); t.state = run.trucksLeft > 0 ? 'away' : 'out'; }
     } else if (t.state === 'away') {
-      t.timer += dt;
+      t.timer += dt * fast;
       if (t.timer > 1.2) t.state = 'arriving';
     }
   }
   const truckHit = (x, y) => x > truck.x - 30 && x < truck.x + 270 && y > 40 && y < 175;
   function dumpTruck() {
-    if (truck.state !== 'parked') return false;
+    if (truck.state !== 'parked' || run.trucksLeft <= 0) return false;
+    run.trucksLeft--;
+    if (!demo && !run.finished) run.timing = true;
     truck.state = 'dumping'; truck.timer = 0; truck.spawnT = 0;
     sfx.dump(); sfx.whirr();
+    updateHud();
     return true;
+  }
+  function hurryTruck() {
+    if (truck.state === 'out') return;
+    truck.hurry = 2; sfx.horn();
   }
 
   // ======================================================================
@@ -971,7 +1196,7 @@
 
   function updateLava() {
     const d = lavaImg.data, w = lavaCanvas.width, hgt = lavaCanvas.height;
-    const heat = Math.min(1, melted / CELEBRATE_AT);
+    const heat = Math.min(1, melted / run.target);
     for (let y = 0; y < hgt; y++) for (let x = 0; x < w; x++) {
       const i = (y * w + x) * 4;
       const n = Math.sin(x * 0.35 + time * 2.1) * Math.sin(y * 0.6 - time * 1.3) + Math.sin((x + y) * 0.17 + time * 1.7);
@@ -1076,7 +1301,7 @@
   }
 
   function drawThermo() {
-    const full = celebrating > 0 ? 1 : Math.min(1, melted / CELEBRATE_AT);
+    const full = Math.min(1, melted / run.target);
     const topY = THERMO.bottom - (THERMO.bottom - THERMO.top) * full;
     const grad = ctx.createLinearGradient(0, THERMO.bottom, 0, THERMO.top);
     grad.addColorStop(0, '#ff3b1f'); grad.addColorStop(0.6, '#ffae00'); grad.addColorStop(1, '#fff36b');
@@ -1089,13 +1314,20 @@
 
   function drawBanner() {
     if (banner.t <= 0) return;
-    const a = Math.min(1, banner.t, (3 - banner.t) * 3 + 0.2);
+    const a = Math.max(0, Math.min(1, banner.t * 2, (3.4 - banner.t) * 3));
     ctx.save();
-    ctx.globalAlpha = Math.max(0, Math.min(1, a));
-    ctx.font = '700 72px ui-rounded, "SF Pro Rounded", system-ui, sans-serif';
+    ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(5,7,13,0.75)';
+    ctx.beginPath(); ctx.roundRect ? ctx.roundRect(W / 2 - 460, 410, 920, banner.sub ? 170 : 120, 30) : ctx.rect(W / 2 - 460, 410, 920, 150); ctx.fill();
+    ctx.font = '700 64px ui-rounded, "SF Pro Rounded", system-ui, sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillStyle = '#bff3ff'; ctx.shadowColor = '#19c8ff'; ctx.shadowBlur = 30;
-    ctx.fillText(banner.text, W / 2, 80);
+    ctx.fillText(banner.text, W / 2, 470);
+    if (banner.sub) {
+      ctx.font = '600 36px ui-rounded, "SF Pro Rounded", system-ui, sans-serif';
+      ctx.shadowBlur = 10; ctx.fillStyle = '#fff3a0';
+      ctx.fillText(banner.sub, W / 2, 540);
+    }
     ctx.restore();
   }
 
@@ -1134,6 +1366,7 @@
       ctx.globalAlpha = alpha;
       ctx.fillStyle = b.melt ? `hsl(${30 - b.melt * 20} 100% ${60 + b.melt * 30}%)` : b.col;
       ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, TAU); ctx.fill();
+      if (b.free && !b.melt) { ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = 2.5; ctx.stroke(); }
       if (r > 5) {
         ctx.fillStyle = 'rgba(255,255,255,0.55)';
         ctx.beginPath(); ctx.arc(b.x - r * 0.35, b.y - r * 0.35, r * 0.3, 0, TAU); ctx.fill();
@@ -1157,7 +1390,7 @@
   // ======================================================================
   const toWorld = e => ({ x: (e.clientX - offX) / scale, y: (e.clientY - offY) / scale });
   function onTap(x, y) {
-    if (truckHit(x, y)) { if (!dumpTruck()) sfx.horn(); return; }
+    if (truckHit(x, y)) { if (!dumpTruck()) hurryTruck(); return; }
     for (const part of L.parts) if (part.tap && part.tap(x, y)) return;
     for (const g of L.gears) if (Math.hypot(x - g.x, y - g.y) < g.r + 20) {
       g.boost = 2.5; sfx.whirr(); burst(g.x, g.y, '#9ff3ff', 12, 260, 0.5, 3); return;
@@ -1167,33 +1400,178 @@
     }
     for (const p of L.pegs) if (Math.hypot(x - p.x, y - p.y) < 24) { p.flash = 1; sfx.peg(p.note + (p.x / 100 | 0)); return; }
     if (x < 0 || x > W || y < 0 || y > H) return;
-    addBall(x, y, Math.random() < 0.55 ? BIG : SMALL, HUES[(Math.random() * HUES.length) | 0]);
+    // bonus play balls: fun to drop, but they don't count for the level
+    addBall(x, y, Math.random() < 0.55 ? BIG : SMALL, HUES[(Math.random() * HUES.length) | 0], 0, 0, true);
     burst(x, y, '#ffffff', 6, 140, 0.3, 2);
     sfx.pop();
   }
   canvas.addEventListener('pointerdown', e => {
     e.preventDefault();
     initAudio();
-    if (!started) return;
+    if (mode !== 'play') return;
     const p = toWorld(e);
     onTap(p.x, p.y);
   });
   ['gesturestart', 'gesturechange', 'contextmenu', 'dblclick'].forEach(ev =>
     document.addEventListener(ev, e => e.preventDefault(), { passive: false }));
-  document.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+  document.addEventListener('touchmove', e => { if (!e.target.closest('.scroll')) e.preventDefault(); }, { passive: false });
 
-  const startEl = document.getElementById('start');
-  function start() {
-    initAudio();
-    if (started) return;
-    started = true;
-    startEl.style.display = 'none';
-    banner.t = 2.8;
+  // ======================================================================
+  // Screens and HUD
+  // ======================================================================
+  const $ = id => document.getElementById(id);
+  const tap = (el, fn) => el.addEventListener('pointerup', e => { e.preventDefault(); e.stopPropagation(); initAudio(); fn(e); });
+  ['pointerdown', 'touchstart'].forEach(ev => document.querySelectorAll('.panel, #hud, #boosters').forEach(el => el.addEventListener(ev, e => e.stopPropagation())));
+  const screens = ['start', 'levelsel', 'board', 'done', 'fail'];
+  function show(id) {
+    for (const s of screens) $(s).classList.toggle('hidden', s !== id);
+    const playing = id === null;
+    $('hud').classList.toggle('hidden', !playing);
+    $('boosters').classList.toggle('hidden', !playing);
   }
-  startEl.addEventListener('pointerup', start);
-  startEl.addEventListener('touchend', e => { e.preventDefault(); start(); }, { passive: false });
+  const fmtTime = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+  const starStr = n => '★'.repeat(n) + '☆'.repeat(3 - n);
 
-  const muteBtn = document.getElementById('mute');
+  function updateHud() {
+    $('hud-level').textContent = `${run.level + 1}`;
+    $('hud-time').textContent = fmtTime(run.timer);
+    $('hud-score').textContent = String(run.score);
+    $('hud-goal').textContent = `${Math.min(melted, run.target)}/${run.target}`;
+    const left = run.trucksLeft + (truck.state === 'parked' || truck.state === 'arriving' || truck.state === 'away' ? 0 : 0);
+    $('hud-trucks').textContent = left > 0 ? '🚚'.repeat(Math.min(left, 5)) + (left > 5 ? `+${left - 5}` : '') : '—';
+    $('b-truck-n').textContent = save.boosters.truck;
+    $('b-turbo-n').textContent = save.boosters.turbo;
+    $('b-truck').disabled = save.boosters.truck <= 0 || run.finished;
+    $('b-turbo').disabled = save.boosters.turbo <= 0 || run.turbo > 0 || run.finished;
+  }
+
+  function play(i) {
+    loadLevel(i);
+    mode = 'play';
+    show(null);
+    updateHud();
+  }
+
+  function buildLevelGrid() {
+    const grid = $('grid');
+    grid.innerHTML = '';
+    let total = 0;
+    for (let i = 0; i < 20; i++) {
+      total += save.stars[i];
+      const open = unlocked(i);
+      const b = document.createElement('button');
+      b.className = 'tile' + (open ? '' : ' locked');
+      if (open) {
+        b.innerHTML = `<span class="num">${i + 1}</span><span class="st">${starStr(save.stars[i])}</span>`;
+        tap(b, () => play(i));
+      } else {
+        b.innerHTML = `<span class="lock">🔒</span><span class="need">${'★'.repeat(STARS_NEEDED(i))} on ${i}</span>`;
+        tap(b, () => { sfx.bonk(); b.classList.remove('shake'); void b.offsetWidth; b.classList.add('shake'); });
+      }
+      grid.appendChild(b);
+    }
+    $('total-stars').textContent = `★ ${total} / 60`;
+    $('lv-player').textContent = save.player;
+    $('lv-boost').textContent = `🚚 ${save.boosters.truck}   ⚡ ${save.boosters.turbo}`;
+  }
+  function openLevels() {
+    mode = 'levels';
+    buildLevelGrid();
+    show('levelsel');
+    if (!demo) loadLevel(levelIndex, true);
+  }
+
+  function buildPlayers() {
+    const box = $('players');
+    box.innerHTML = '';
+    for (const name of save.players) {
+      const b = document.createElement('button');
+      b.className = 'chip' + (name === save.player ? ' on' : '');
+      b.textContent = name;
+      tap(b, () => { save.player = name; persist(); buildPlayers(); });
+      box.appendChild(b);
+    }
+    const add = document.createElement('button');
+    add.className = 'chip add'; add.textContent = '+';
+    tap(add, () => {
+      const name = (prompt('Player name?') || '').trim().slice(0, 14);
+      if (name && !save.players.includes(name)) { save.players.push(name); save.player = name; persist(); buildPlayers(); }
+    });
+    box.appendChild(add);
+  }
+
+  function buildBoard() {
+    const rows = save.runs.slice(0, 10);
+    $('board-list').innerHTML = rows.length ? rows.map((r, k) =>
+      `<tr><td>${k + 1}</td><td>${escapeHtml(r.name)}</td><td>Lv ${r.level}</td><td class="gold">${starStr(r.stars)}</td><td>${r.score}</td><td>${fmtTime(r.time)}</td></tr>`).join('')
+      : '<tr><td colspan="6" class="empty">Play a level to get on the board!</td></tr>';
+    const per = {};
+    for (const r of save.runs) {
+      per[r.name] = per[r.name] || { best: 0, levels: new Set() };
+      per[r.name].best = Math.max(per[r.name].best, r.score);
+      per[r.name].levels.add(r.level);
+    }
+    $('board-players').innerHTML = Object.entries(per).sort((a, b) => b[1].levels.size - a[1].levels.size || b[1].best - a[1].best)
+      .map(([n, v]) => `<tr><td>${escapeHtml(n)}</td><td>${v.levels.size} ${v.levels.size === 1 ? "level" : "levels"}</td><td>best ${v.best}</td></tr>`).join('');
+  }
+  const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  function showDone() {
+    mode = 'done';
+    const r = run.result;
+    $('done-stars').innerHTML = [1, 2, 3].map(n => `<span class="${n <= r.stars ? 'on' : ''}" style="animation-delay:${n * 0.25}s">★</span>`).join('');
+    $('done-time').textContent = fmtTime(r.t);
+    $('done-score').textContent = String(run.score);
+    $('done-best').textContent = r.newBest ? 'New best!' : `Best ${save.best[run.level].score}`;
+    const notes = [];
+    if (r.earned.length) notes.push(`You earned ${r.earned.join(' ')}`);
+    if (r.stars < 3) notes.push(`3 stars: finish in ${fmtTime(run.t3)}${r.stars < 2 ? `, 2 stars: ${fmtTime(run.t2)}` : ''}`);
+    if (r.unlockedNext) notes.push(`Level ${run.level + 2} unlocked!`);
+    else if (run.level + 1 < 20 && !unlocked(run.level + 1)) notes.push(`Level ${run.level + 2} needs ${'★'.repeat(STARS_NEEDED(run.level + 1))}`);
+    $('done-note').innerHTML = notes.map(escapeHtml).join('<br>');
+    $('done-next').classList.toggle('hidden', !(run.level + 1 < 20 && unlocked(run.level + 1)));
+    show('done');
+  }
+  function showFail() {
+    mode = 'fail';
+    $('fail-count').textContent = `${melted} of ${run.target} balls melted`;
+    $('fail-boost').classList.toggle('hidden', save.boosters.truck <= 0);
+    $('fail-boost-n').textContent = save.boosters.truck;
+    show('fail');
+    sfx.bonk();
+  }
+
+  function useTruckBooster() {
+    if (save.boosters.truck <= 0 || run.finished) return;
+    save.boosters.truck--; persist();
+    run.trucksLeft++;
+    if (truck.state === 'out') { truck.state = 'away'; truck.timer = 0; }
+    burst(1400, 120, '#fff3a0', 20, 300, 0.6, 3); sfx.horn();
+    updateHud();
+  }
+  function useTurbo() {
+    if (save.boosters.turbo <= 0 || run.turbo > 0 || run.finished) return;
+    save.boosters.turbo--; persist();
+    run.turbo = 10;
+    sfx.whirr(); banner = { text: '⚡ Turbo! ⚡', sub: '', t: 1.6 };
+    updateHud();
+  }
+
+  tap($('play'), () => openLevels());
+  tap($('lv-back'), () => { mode = 'title'; buildPlayers(); show('start'); });
+  tap($('lv-board'), () => { buildBoard(); show('board'); });
+  tap($('board-back'), () => openLevels());
+  tap($('hud-menu'), () => openLevels());
+  tap($('b-truck'), useTruckBooster);
+  tap($('b-turbo'), useTurbo);
+  tap($('done-retry'), () => play(run.level));
+  tap($('done-levels'), () => openLevels());
+  tap($('done-next'), () => play(run.level + 1));
+  tap($('fail-retry'), () => play(run.level));
+  tap($('fail-levels'), () => openLevels());
+  tap($('fail-boost'), () => { useTruckBooster(); mode = 'play'; show(null); });
+
+  const muteBtn = $('mute');
   try { muted = localStorage.getItem('bf-muted') === '1'; } catch (e) {}
   muteBtn.textContent = muted ? '🔇' : '🔊';
   muteBtn.addEventListener('pointerdown', e => {
@@ -1205,22 +1583,9 @@
     try { localStorage.setItem('bf-muted', muted ? '1' : '0'); } catch (e) {}
   });
 
-  // level buttons
-  const levelBar = document.getElementById('levels');
-  const levelBtns = [];
-  LEVELS.forEach((_, i) => {
-    const b = document.createElement('button');
-    b.textContent = String(i + 1);
-    b.setAttribute('aria-label', `Factory ${i + 1}`);
-    b.addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); initAudio(); if (i !== levelIndex) { loadLevel(i); sfx.pop(); } });
-    levelBar.appendChild(b);
-    levelBtns.push(b);
-  });
-  function updateLevelButtons() { levelBtns.forEach((b, i) => b.classList.toggle('on', i === levelIndex)); }
-
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) { if (ac) ac.suspend(); }
-    else { if (ac && started) ac.resume(); last = performance.now(); }
+    else { if (ac) ac.resume(); last = performance.now(); }
   });
 
   // ======================================================================
@@ -1237,9 +1602,9 @@
     draw();
     requestAnimationFrame(loop);
   }
-  let saved = 0;
-  try { saved = parseInt(localStorage.getItem('bf-level') || '0', 10) || 0; } catch (e) {}
-  loadLevel(saved);
+  loadLevel(0, true);
+  buildPlayers();
+  show('start');
   window.addEventListener('resize', resize);
   window.addEventListener('orientationchange', () => setTimeout(resize, 200));
   resize();
@@ -1247,7 +1612,8 @@
 
   // test hook (harmless in production)
   window.__bf = {
-    get balls() { return balls; }, get melted() { return melted; }, get level() { return levelIndex; }, get stuckPops() { return stuckPops; },
-    truck, dumpTruck, onTap, step, loadLevel, addBall,
+    get balls() { return balls; }, get melted() { return melted; }, get level() { return levelIndex; }, get L() { return L; },
+    get stuckPops() { return stuckPops; }, get mode() { return mode; }, run, save, truck, dumpTruck, onTap, step, loadLevel, play, addBall,
+    setDemo(v) { demo = v; },
   };
 })();

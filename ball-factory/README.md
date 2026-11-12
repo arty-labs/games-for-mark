@@ -3,17 +3,28 @@
 A glowing ball machine made for Mark. A friendly truck dumps colourful balls into a factory of neon pipes. The balls roll down ramps, small ones drop through the sieve and bounce through the peg board, and big ones get crunched into little ones by the gears. Everything ends up melting in the lava, which fills the thermometer. Fill it and you get fireworks.
 
 **How to play**
-- Tap the truck (when the hand is pointing at it) to dump a load of balls.
-- Tap anywhere else to drop a ball there.
-- Tap the machines to make them go: spinners and conveyor belts speed up, buckets tip, trapdoors open, flippers flip, the piston and lift go faster. Pegs and stars make sounds.
-- Fill the thermometer with melted balls to get fireworks, then the next factory rolls in.
-- The number buttons in the top-left corner jump straight to a factory. The speaker button turns sound on and off.
+- Pick who's playing on the start screen (tap **+** to add a name), then press play and choose a level.
+- Each level gives you a few trucks of balls and a goal: melt that many balls in the lava before the trucks run out.
+- Tap the truck to dump its balls. Tap it while it's driving to make it hurry (that's how you get 3 stars on the hard levels).
+- Tap the machines to speed them up: spinners, belts, pistons, gears. Buckets tip, trapdoors open and flippers flip when tapped.
+- Tapping empty space drops a white-ringed bonus ball. It's just for fun and doesn't count toward the goal.
+- The timer starts with the first truck. Faster finishes earn more stars and a bigger score.
 
-**Factories**
-1. The Crusher: sieve, gear crusher, peg board, pinwheel
-2. Wheels & Belts: conveyor belts, spinning paddle, tipping bucket, piston pusher
-3. Lift & Hammer: zig-zag chute, ball lift, trapdoor, swinging hammer
-4. Flipper Fun: tipping bucket, conveyor, crusher, flippers and bumpers over the lava
+**Stars and unlocking**
+- Levels 2 to 5 unlock with 1 star on the level before.
+- Levels 6 to 12 need 2 stars on the level before.
+- Levels 13 to 20 need 3 stars on the level before.
+
+**Boosters** (bottom-left buttons)
+- 🚚 Extra truck: one more load of balls for this level. Also offered when you run out.
+- ⚡ Turbo: every machine and the truck run at full speed for 10 seconds.
+- You start with 3 of each. 2 stars earns a ⚡, 3 stars earns a 🚚.
+
+**Leaderboard**: the 🏆 button on the level screen shows the top scores and each player's progress. Scores are saved on the iPad itself (there's no online server), so they stay on that device.
+
+**Levels**: 1 The Crusher, 2 Wheels & Belts, 3 Lift & Hammer, 4 Flipper Fun, 5 Bumper Alley, 6 Belt Run, 7 The Sifter, 8 Gear Grinder, 9 Push It, 10 Trap Time, 11 Hammer Row, 12 Flipper Pit, 13 Bucket Brigade, 14 Sort & Smash, 15 Busy Belts, 16 Crunch Time, 17 Pinball Plant, 18 Double Trouble, 19 Mega Mill, 20 The Big Machine.
+
+Each level's goal and star times are in the `TUNING` table near the top of `game.js` if you want to make a level easier or harder.
 
 It works offline once it has been opened once, and it plays best with the iPad sideways.
 
