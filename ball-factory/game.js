@@ -669,10 +669,10 @@
   // Per level: trucks you get, balls to melt, and the times for 3 and 2 stars (seconds).
   // Tuned by simulating every level (see README).
   const TUNING = [
-    [3, 160, 30, 39], [3, 80, 32, 42], [3, 80, 49, 63], [3, 160, 33, 43], [3, 80, 51, 66],
-    [3, 95, 46, 60], [3, 95, 45, 59], [3, 200, 43, 56], [3, 95, 46, 59], [3, 95, 54, 67],
-    [3, 95, 41, 54], [3, 200, 43, 56], [3, 110, 48, 60], [3, 225, 45, 56], [3, 110, 70, 81],
-    [3, 225, 46, 55], [3, 220, 45, 54], [3, 110, 58, 66], [3, 225, 47, 53], [3, 230, 45, 55],
+    [3, 240, 30, 39], [3, 120, 30, 39], [3, 120, 50, 65], [3, 240, 36, 47], [3, 120, 45, 59],
+    [3, 140, 49, 61], [3, 140, 44, 54], [3, 300, 46, 57], [3, 140, 44, 55], [3, 140, 60, 75],
+    [3, 140, 39, 49], [3, 300, 46, 58], [3, 165, 41, 57], [3, 340, 43, 56], [3, 165, 66, 81],
+    [3, 340, 46, 57], [3, 330, 44, 58], [3, 165, 54, 71], [3, 340, 41, 56], [3, 345, 49, 58],
   ];
   const STARS_NEEDED = i => (i === 0 ? 0 : i <= 4 ? 1 : i <= 11 ? 2 : 3);
 
@@ -692,8 +692,8 @@
 
   function refillTruck() {
     truck.load = [];
-    for (let i = 0; i < 22; i++) truck.load.push({ r: BIG, h: HUES[(Math.random() * HUES.length) | 0] });
-    for (let i = 0; i < 18; i++) truck.load.push({ r: SMALL, h: HUES[(Math.random() * HUES.length) | 0] });
+    for (let i = 0; i < 44; i++) truck.load.push({ r: BIG, h: HUES[(Math.random() * HUES.length) | 0] });
+    for (let i = 0; i < 36; i++) truck.load.push({ r: SMALL, h: HUES[(Math.random() * HUES.length) | 0] });
     truck.load.sort(() => Math.random() - 0.5);
   }
 
@@ -1101,7 +1101,7 @@
         while (t.spawnT <= 0 && t.load.length) {
           const l = t.load.pop();
           addBall(t.x - 30 + Math.random() * 14, 128 + Math.random() * 10, l.r, l.h, -90 - Math.random() * 120, 40);
-          t.spawnT += 0.045;
+          t.spawnT += 0.028;
         }
       }
       if (!t.load.length && t.timer > 1.6) t.state = 'lowering';
@@ -1388,6 +1388,8 @@
   // ======================================================================
   // Input
   // ======================================================================
+  const TAP_COOLDOWN = 0.5;
+  let lastTapBall = -1;
   const toWorld = e => ({ x: (e.clientX - offX) / scale, y: (e.clientY - offY) / scale });
   function onTap(x, y) {
     if (truckHit(x, y)) { if (!dumpTruck()) hurryTruck(); return; }
@@ -1400,6 +1402,9 @@
     }
     for (const p of L.pegs) if (Math.hypot(x - p.x, y - p.y) < 24) { p.flash = 1; sfx.peg(p.note + (p.x / 100 | 0)); return; }
     if (x < 0 || x > W || y < 0 || y > H) return;
+    // a tap drops at most one marble every half second; trucks are the fast way
+    if (time - lastTapBall < TAP_COOLDOWN) { burst(x, y, '#ffffff', 3, 80, 0.2, 1.5); return; }
+    lastTapBall = time;
     // tapped balls count toward the goal just like truck balls; the timer starts with them too
     addBall(x, y, Math.random() < 0.55 ? BIG : SMALL, HUES[(Math.random() * HUES.length) | 0]);
     if (!demo && !run.finished) run.timing = true;

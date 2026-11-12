@@ -7,7 +7,7 @@ A glowing ball machine made for Mark. A friendly truck dumps colourful balls int
 - Each level gives you a few trucks of balls and a goal: melt that many balls in the lava before the trucks run out.
 - Tap the truck to dump its balls. Tap it while it's driving to make it hurry (that's how you get 3 stars on the hard levels).
 - Tap the machines to speed them up: spinners, belts, pistons, gears. Buckets tip, trapdoors open and flippers flip when tapped.
-- Tapping empty space drops an extra ball. It counts toward the goal and the score like any other ball.
+- Each truck brings 80 marbles. Tapping empty space drops one extra marble (at most two a second). Tapped marbles count toward the goal too, but trucks are much faster.
 - The timer starts with the first truck or the first tapped ball. Faster finishes earn more stars and a bigger score.
 
 **Stars and unlocking**
